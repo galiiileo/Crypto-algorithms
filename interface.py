@@ -1,6 +1,4 @@
 from tkinter import filedialog
-import tempfile
-import os
 import tkinter as tk
 import numpy as np
 from tkinter import ttk, messagebox
@@ -13,7 +11,7 @@ from methods.Vigenere import encryption as vigenere_encrypt, decryption as vigen
 from methods.ColumanrCipher import encrypt as columnar_encrypt, decrypt as columnar_decrypt
 from methods.HillCipher import encrypt as hill_encrypt,decrypt as hill_decrypt,matrix_mod_inv
 from methods.desCipher import encrypt as des_encrypt, decrypt as des_decrypt
-from methods.rsaCipher import generate_keys, encrypt as rsa_encrypt, decrypt as rsa_decrypt
+from methods.rsaCipher import generate_keys as simple_rsa_generate_keys,encrypt as simple_rsa_encrypt,decrypt as simple_rsa_decrypt,str_to_cipher
 
 class CryptographyApp:
     def __init__(self, root):
@@ -21,8 +19,8 @@ class CryptographyApp:
         self.root.title("Cryptography Tool")
         self.root.geometry("800x700")
         self.key_matrix = None
-        self.rsa_private_key = None
-        self.rsa_public_key = None
+        self.simple_rsa_public_key = None
+        self.simple_rsa_private_key = None
         
         # Initialize variables
         self.operation_var = tk.StringVar(value="encryption")
@@ -160,22 +158,34 @@ class CryptographyApp:
         self.des_frame.pack(fill="x")
         self.des_frame.pack_forget()  # Hide initially
 
-        # RSA key management
-        self.rsa_frame = ttk.LabelFrame(self.key_frame, text="RSA Key Management", padding=10)
+        # Simple RSA key management
+        self.simple_rsa_frame = ttk.LabelFrame(self.key_frame, text="Simple RSA Keys", padding=10)
+        
         # Key generation button
-        ttk.Button(self.rsa_frame, text="Generate Key Pair", 
-                    command=self.generate_rsa_keys).pack(pady=5)
-        # Key display area
-        self.rsa_key_status = ttk.Label(self.rsa_frame, text="No RSA keys generated")
-        self.rsa_key_status.pack()
+        ttk.Button(self.simple_rsa_frame, text="Generate Demo Keys", 
+                    command=self.generate_simple_rsa_keys).pack(pady=5)
+        
+        # Key display
+        self.simple_rsa_key_status = ttk.Label(self.simple_rsa_frame, text="No keys generated")
+        self.simple_rsa_key_status.pack()
+        
+        # Public key display
+        self.public_key_label = ttk.Label(self.simple_rsa_frame, text="Public Key (e,n): ")
+        self.public_key_label.pack()
+        
+        # Private key warning
+        ttk.Label(self.simple_rsa_frame, text="Private key is kept in memory", foreground="orange").pack()
         # Public key file button
-        ttk.Button(self.rsa_frame, text="Save Public Key", 
-                    command=self.save_public_key).pack(side="left", padx=5)
+        ttk.Button(self.simple_rsa_frame, text="Save Public Key", 
+                command=self.save_public_key).pack(side="left", padx=5)
+        
         # Private key file button
-        ttk.Button(self.rsa_frame, text="Save Private Key", 
-                    command=self.save_private_key).pack(side="left", padx=5)
-        self.rsa_frame.pack(fill="x")
-        self.rsa_frame.pack_forget()  # Hide initially
+        ttk.Button(self.simple_rsa_frame, text="Save Private Key", 
+                command=self.save_private_key).pack(side="left", padx=5)
+        
+        self.simple_rsa_frame.pack(fill="x")
+        self.simple_rsa_frame.pack_forget()  # Hide initially
+
         
         # Text areas
         text_frame = ttk.Frame(main_frame)
@@ -237,19 +247,21 @@ class CryptographyApp:
         else:
             self.input_frame.config(text="Chiper Text")
             self.output_frame.config(text="Orginal Text")
-    def generate_rsa_keys(self):
-        """Generate new RSA key pair"""
+    def generate_simple_rsa_keys(self):
+        """Generate simple RSA keys"""
         try:
-            self.rsa_private_key, self.rsa_public_key = generate_keys()
-            self.rsa_key_status.config(
-                text="✓ RSA keys generated (2048-bit)",
+            self.simple_rsa_public_key, self.simple_rsa_private_key = simple_rsa_generate_keys()
+            e, n = self.simple_rsa_public_key
+            self.simple_rsa_key_status.config(
+                text="✓ RSA keys generated",
                 foreground="green"
             )
+            self.public_key_label.config(text=f"Public Key (e,n): ({e}, {n})")
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to generate RSA keys: {str(e)}")
+            messagebox.showerror("Error", f"Failed to generate keys: {str(e)}")
     def save_public_key(self):
         """Save public key to file"""
-        if not self.rsa_public_key:
+        if not self.simple_rsa_public_key:
             messagebox.showwarning("Warning", "No public key generated yet")
             return
         
@@ -266,7 +278,7 @@ class CryptographyApp:
             print("No file selected")
     def save_private_key(self):
         """Save private key to file"""
-        if not self.rsa_private_key:
+        if not self.simple_rsa_private_key:
             messagebox.showwarning("Warning", "No private key generated yet")
             return
         
@@ -294,7 +306,7 @@ class CryptographyApp:
         self.hill_frame.pack_forget()
         self.columnar_frame.pack_forget()
         self.des_frame.pack_forget()
-        self.rsa_frame.pack_forget()
+        self.simple_rsa_frame.pack_forget()
         # Show the appropriate key frame
         if method == "caesar":
             self.caesar_frame.pack(fill="x")
@@ -313,7 +325,7 @@ class CryptographyApp:
         elif method == "des":
             self.des_frame.pack(fill="x")
         elif method == "rsa":
-            self.rsa_frame.pack(fill="x")
+            self.simple_rsa_frame.pack(fill="x")
     def process_text(self):
         operation = self.operation_var.get()
         method = self.method_var.get()
@@ -405,13 +417,14 @@ class CryptographyApp:
                     result = des_decrypt(ciphertext, key)
             elif method == "rsa":
                 if operation == "encryption":
-                    if not self.rsa_public_key:
-                        raise ValueError("No RSA public key generated")
-                    result = rsa_encrypt(input_text, self.rsa_public_key)
+                    if not self.simple_rsa_public_key:
+                        raise ValueError("Generate keys first")
+                    result = simple_rsa_encrypt(input_text, self.simple_rsa_public_key)
                 else:
-                    if not self.rsa_private_key:
-                        raise ValueError("No RSA private key generated")
-                    result = rsa_decrypt(input_text, self.rsa_private_key)
+                    if not self.simple_rsa_private_key:
+                        raise ValueError("Generate keys first")
+                    cipher = str_to_cipher(input_text)
+                    result = simple_rsa_decrypt(cipher, self.simple_rsa_private_key)
             else:
                 result = f"Method {method} not implemented yet"
             self.update_output(result)
